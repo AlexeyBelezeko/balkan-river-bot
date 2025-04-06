@@ -1,0 +1,3 @@
+- Go code to scrape water level data from Serbian hydrometeorological service website (hidmet.gov.rs). The code extracts river name, station, water level, discharge, and water temperature from HTML tables. Example output format: "River: ГРАДАЦ, Station: ДЕГУРИЋ, Water Level: 19 cm, Discharge: -5 m³/s, Water Temperature: * °C".
+- Need to implement commands: list of rivers, info for selected river.
+- Need to write deployment instructions.
