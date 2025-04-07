@@ -65,6 +65,45 @@ This guide provides detailed instructions for setting up the Water Bot on a Digi
    docker ps
    ```
 
+## Creating a Deployment SSH Key
+
+> For additional security recommendations, see [Security Recommendations](./security-recommendations.md)
+
+It's best to create a dedicated SSH key for automated deployments rather than using your personal SSH key:
+
+1. On your local machine, generate a dedicated deployment key:
+   ```bash
+   # Generate a new SSH key with no passphrase
+   ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/water_bot_deploy
+   
+   # The output will be two files:
+   # ~/.ssh/water_bot_deploy (private key)
+   # ~/.ssh/water_bot_deploy.pub (public key)
+   ```
+
+2. Copy the public key to your server:
+   ```bash
+   # First, SSH to your server
+   ssh waterbot@your_droplet_ip
+   
+   # Then, add to authorized_keys
+   mkdir -p ~/.ssh
+   nano ~/.ssh/authorized_keys
+   
+   # Paste the content of your local ~/.ssh/water_bot_deploy.pub file
+   # Save and exit (Ctrl+X, then Y, then Enter)
+   
+   # Set proper permissions
+   chmod 700 ~/.ssh
+   chmod 600 ~/.ssh/authorized_keys
+   ```
+
+3. Test the new key:
+   ```bash
+   # From your local machine
+   ssh -i ~/.ssh/water_bot_deploy waterbot@your_droplet_ip
+   ```
+
 ## GitHub Repository Setup
 
 1. Fork or clone the Water Bot repository to your GitHub account.
@@ -74,7 +113,7 @@ This guide provides detailed instructions for setting up the Water Bot on a Digi
    - Add the following secrets:
      - `DIGITALOCEAN_HOST`: Your droplet's IP address
      - `DIGITALOCEAN_USERNAME`: Your non-root username (e.g., "waterbot")
-     - `DIGITALOCEAN_PRIVATE_KEY`: Your private SSH key (contents of your `id_rsa` file)
+     - `DIGITALOCEAN_PRIVATE_KEY`: The contents of your dedicated deployment private key (~/.ssh/water_bot_deploy) - include the entire file including BEGIN and END lines
      - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token from BotFather
 
 ## How the Deployment Works
@@ -160,3 +199,36 @@ groups
 sudo usermod -aG docker $(whoami)
 # Then log out and back in
 ```
+
+### SSH Key Issues
+
+If GitHub Actions can't connect to your server:
+
+1. Verify the format of your private key in GitHub Secrets:
+   - Make sure you've included the entire key file content
+   - Include the BEGIN and END lines
+
+2. Check permissions on the server:
+   ```bash
+   # SSH to your server
+   ssh waterbot@your_droplet_ip
+   
+   # Check permissions (should be 700 for .ssh and 600 for files)
+   ls -la ~/.ssh
+   
+   # Fix if needed
+   chmod 700 ~/.ssh
+   chmod 600 ~/.ssh/authorized_keys
+   ```
+
+3. Test the SSH key locally:
+   ```bash
+   # From your development machine
+   ssh -i ~/.ssh/water_bot_deploy -v waterbot@your_droplet_ip
+   ```
+   
+4. Check SSH server logs for clues:
+   ```bash
+   # On your server
+   sudo tail -f /var/log/auth.log
+   ```
