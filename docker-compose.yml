@@ -1,0 +1,9 @@
+version: '3'
+
+services:
+  water-bot:
+    image: water-bot:latest
+    container_name: water-bot
+    restart: always
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
