@@ -23,27 +23,26 @@ jobs:
         tags: water-bot:latest
         outputs: type=docker,dest=/tmp/water-bot.tar
         
-    - name: Copy Docker image and deployment files to server
-      uses: appleboy/scp-action@master
-      with:
-        host: ${{ secrets.DIGITALOCEAN_HOST }}
-        username: ${{ secrets.DIGITALOCEAN_USERNAME }}
-        key: ${{ secrets.DIGITALOCEAN_PRIVATE_KEY }}
-        source: "/tmp/water-bot.tar,docker-compose.yml"
-        target: "/opt/water-bot"
-        strip_components: 1
+    - name: Setup SSH Key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.DIGITALOCEAN_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        ssh-keyscan -H ${{ secrets.DIGITALOCEAN_HOST }} >> ~/.ssh/known_hosts
+        
+    - name: Copy Docker image to server
+      run: |
+        scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/water-bot.tar ${{ secrets.DIGITALOCEAN_USERNAME }}@${{ secrets.DIGITALOCEAN_HOST }}:/opt/water-bot/
+        scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no docker-compose.yml ${{ secrets.DIGITALOCEAN_USERNAME }}@${{ secrets.DIGITALOCEAN_HOST }}:/opt/water-bot/
         
     - name: Deploy to Digital Ocean
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.DIGITALOCEAN_HOST }}
-        username: ${{ secrets.DIGITALOCEAN_USERNAME }}
-        key: ${{ secrets.DIGITALOCEAN_PRIVATE_KEY }}
-        script: |
-          cd /opt/water-bot
-          docker load -i water-bot.tar
-          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" > .env
-          docker-compose down
-          docker-compose up -d
-          rm water-bot.tar
-          echo "Deployment completed successfully at $(date)"
+      run: |
+        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.DIGITALOCEAN_USERNAME }}@${{ secrets.DIGITALOCEAN_HOST }} "
+          cd /opt/water-bot && 
+          docker load -i water-bot.tar && 
+          echo \"TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}\" > .env && 
+          docker-compose down && 
+          docker-compose up -d && 
+          rm water-bot.tar && 
+          echo \"Deployment completed successfully at $(date)\"
+        "

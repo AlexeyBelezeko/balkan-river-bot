@@ -113,8 +113,17 @@ It's best to create a dedicated SSH key for automated deployments rather than us
    - Add the following secrets:
      - `DIGITALOCEAN_HOST`: Your droplet's IP address
      - `DIGITALOCEAN_USERNAME`: Your non-root username (e.g., "waterbot")
-     - `DIGITALOCEAN_PRIVATE_KEY`: The contents of your dedicated deployment private key (~/.ssh/water_bot_deploy) - include the entire file including BEGIN and END lines
+     - `DIGITALOCEAN_PRIVATE_KEY`: The contents of your dedicated deployment private key
+       ```bash
+       # Run this command to get the correctly formatted private key content
+       cat ~/.ssh/water_bot_deploy | base64 -w 0
+       # Or for macOS:
+       cat ~/.ssh/water_bot_deploy | base64
+       ```
+       Make sure to include the entire file including BEGIN and END lines
      - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token from BotFather
+   
+   > **Important**: Ensure your private key is in the correct format. SSH keys need to be properly formatted with newlines, not just a long string of characters. The GitHub Actions workflow handles this by saving the key to a file.
 
 ## How the Deployment Works
 
