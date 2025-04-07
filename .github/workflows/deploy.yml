@@ -23,12 +23,35 @@ jobs:
         tags: water-bot:latest
         outputs: type=docker,dest=/tmp/water-bot.tar
         
+    - name: Check Required Secrets
+      run: |
+        # Check if required secrets are set
+        if [ -z "${{ secrets.DIGITALOCEAN_HOST }}" ]; then
+          echo "Error: DIGITALOCEAN_HOST secret is not set"
+          exit 1
+        fi
+        if [ -z "${{ secrets.DIGITALOCEAN_USERNAME }}" ]; then
+          echo "Error: DIGITALOCEAN_USERNAME secret is not set"
+          exit 1
+        fi
+        if [ -z "${{ secrets.DIGITALOCEAN_PRIVATE_KEY }}" ]; then
+          echo "Error: DIGITALOCEAN_PRIVATE_KEY secret is not set"
+          exit 1
+        fi
+        if [ -z "${{ secrets.TELEGRAM_BOT_TOKEN }}" ]; then
+          echo "Error: TELEGRAM_BOT_TOKEN secret is not set"
+          exit 1
+        fi
+        
     - name: Setup SSH Key
       run: |
         mkdir -p ~/.ssh
         echo "${{ secrets.DIGITALOCEAN_PRIVATE_KEY }}" > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
-        ssh-keyscan -H ${{ secrets.DIGITALOCEAN_HOST }} >> ~/.ssh/known_hosts
+        # Only run ssh-keyscan if host is provided
+        if [ -n "${{ secrets.DIGITALOCEAN_HOST }}" ]; then
+          ssh-keyscan -H "${{ secrets.DIGITALOCEAN_HOST }}" >> ~/.ssh/known_hosts
+        fi
         
     - name: Copy Docker image to server
       run: |

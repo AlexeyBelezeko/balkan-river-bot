@@ -111,19 +111,22 @@ It's best to create a dedicated SSH key for automated deployments rather than us
 2. Add the following secrets to your GitHub repository:
    - Go to your GitHub repository → Settings → Secrets and variables → Actions
    - Add the following secrets:
-     - `DIGITALOCEAN_HOST`: Your droplet's IP address
+     - `DIGITALOCEAN_HOST`: Your droplet's IP address (e.g., "123.45.67.89")
      - `DIGITALOCEAN_USERNAME`: Your non-root username (e.g., "waterbot")
-     - `DIGITALOCEAN_PRIVATE_KEY`: The contents of your dedicated deployment private key
+     - `DIGITALOCEAN_PRIVATE_KEY`: The contents of your dedicated deployment private key, copied directly from the file:
        ```bash
-       # Run this command to get the correctly formatted private key content
-       cat ~/.ssh/water_bot_deploy | base64 -w 0
-       # Or for macOS:
-       cat ~/.ssh/water_bot_deploy | base64
+       # Use this command to display your private key for copying
+       cat ~/.ssh/water_bot_deploy
        ```
-       Make sure to include the entire file including BEGIN and END lines
+       Copy the ENTIRE output including the "-----BEGIN OPENSSH PRIVATE KEY-----" and "-----END OPENSSH PRIVATE KEY-----" lines.
      - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token from BotFather
    
-   > **Important**: Ensure your private key is in the correct format. SSH keys need to be properly formatted with newlines, not just a long string of characters. The GitHub Actions workflow handles this by saving the key to a file.
+   > **Important**: All of these secrets must be set correctly for the deployment to work. The GitHub Actions workflow will validate that these secrets exist before attempting deployment.
+   
+   > **SSH Key Troubleshooting**: If you're having issues with the SSH key, ensure that:
+   > 1. You've copied the ENTIRE private key file with all lines, not just a portion
+   > 2. The key doesn't have a passphrase (generated with `-N ""`)
+   > 3. The public key has been properly added to the server's authorized_keys file
 
 ## How the Deployment Works
 
