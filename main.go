@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"sort"
@@ -116,7 +117,7 @@ func FetchWaterData() ([]RiverData, error) {
 			waterChange := strings.TrimSpace(cells.Eq(6).Text())
 			discharge := strings.TrimSpace(cells.Eq(7).Text())
 			waterTemp := strings.TrimSpace(cells.Eq(8).Text())
-			
+
 			// Get tendency image
 			tendencyImg := cells.Eq(9).Find("img").AttrOr("alt", "")
 
@@ -198,6 +199,9 @@ func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	log.Println("Starting Water Bot...")
 
+	// Initialize random seed
+	rand.Seed(time.Now().UnixNano())
+
 	// Get the bot token from environment variable
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if botToken == "" {
@@ -229,6 +233,20 @@ func main() {
 			update.Message.Text)
 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
+
+		// Check if the message is from user @lev4e
+		if update.Message.From.UserName == "lev4e" {
+			// Respond with a random phrase from the list
+			phrases := []string{"хуй соси губой тряси", "иди в очко", "иди в пизду", "пиздец ты душный хуй"}
+			randomPhrase := phrases[rand.Intn(len(phrases))]
+			msg.Text = randomPhrase
+
+			log.Printf("Sending random response to user %s: %s", update.Message.From.UserName, msg.Text)
+			if _, err := bot.Send(msg); err != nil {
+				log.Printf("Error sending message: %v", err)
+			}
+			continue
+		}
 
 		switch {
 		case update.Message.IsCommand():
@@ -300,7 +318,7 @@ func main() {
 				}
 			} else {
 				log.Printf("Received non-command message from user %s: %s", update.Message.From.UserName, update.Message.Text)
-				
+
 				// Fetch data for ГРАДАЦ river as default response
 				data, lastUpdate, err := GetCachedData()
 				if err != nil {
@@ -310,18 +328,18 @@ func main() {
 				} else {
 					// Get info for ГРАДАЦ river
 					riverInfo := GetRiverInfo(data, "ГРАДАЦ")
-					
+
 					// Default response with bonus info about ГРАДАЦ
 					var response strings.Builder
 					response.WriteString("I don't understand. Use /help to see available commands.\n\n")
 					response.WriteString("ЈФУИ (Just For Your Information):\n")
-					
+
 					if len(riverInfo) > 0 {
 						response.WriteString(FormatRiverInfo(riverInfo, lastUpdate))
 					} else {
 						response.WriteString("No information available for river ГРАДАЦ at the moment.")
 					}
-					
+
 					msg.Text = response.String()
 				}
 			}
