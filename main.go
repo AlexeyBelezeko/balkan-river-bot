@@ -234,20 +234,6 @@ func main() {
 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 
-		// Check if the message is from user @lev4e
-		if update.Message.From.UserName == "lev4e" {
-			// Respond with a random phrase from the list
-			phrases := []string{"хуй соси губой тряси", "иди в очко", "иди в пизду", "пиздец ты душный хуй"}
-			randomPhrase := phrases[rand.Intn(len(phrases))]
-			msg.Text = randomPhrase
-
-			log.Printf("Sending random response to user %s: %s", update.Message.From.UserName, msg.Text)
-			if _, err := bot.Send(msg); err != nil {
-				log.Printf("Error sending message: %v", err)
-			}
-			continue
-		}
-
 		switch {
 		case update.Message.IsCommand():
 			switch update.Message.Command() {
