@@ -98,7 +98,7 @@ func (uc *RiverUseCase) FormatRiverInfo(riverData []entities.RiverData) string {
 
 		result.WriteString(fmt.Sprintf("🕒 Last update: %s", data.Timestamp.Format("2006-01-02 15:04:05 MST")))
 
-		result.WriteString("\n")
+		result.WriteString("\n\n")
 	}
 
 	// Add last update time with timezone
