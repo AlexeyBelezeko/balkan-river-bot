@@ -48,6 +48,17 @@ func (uc *RiverUseCase) RefreshRiverData() error {
 		data = append(data, gradacData...)
 	}
 
+	// Fetch RHMZ RS data
+	rhmzRsData, err := uc.scraper.FetchRhmzRsData()
+	if err != nil {
+		log.Printf("Warning: failed to fetch RHMZ RS data: %v", err)
+		// Continue with the main data if RHMZ RS fetch fails
+	} else {
+		log.Printf("Successfully fetched %d RHMZ RS data entries", len(rhmzRsData))
+		// Append RHMZ RS data to the main data set
+		data = append(data, rhmzRsData...)
+	}
+
 	// Save all data to repository
 	if err := uc.repo.SaveRiverData(data); err != nil {
 		return fmt.Errorf("failed to save data to repository: %v", err)

@@ -3,8 +3,10 @@ package integration
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -176,7 +178,7 @@ func (ws *WaterScraper) FetchGradacRiverData() ([]entities.RiverData, error) {
 			// Create river data entry
 			data = append(data, entities.RiverData{
 				River:       "ГРАДАЦ",
-				Station:     "Дегурић",
+				Station:     "ДЕГУРИЋ",
 				WaterLevel:  fmt.Sprintf("%d", waterLevel), // Ensure it's consistently formatted
 				WaterChange: "",                            // Not available in this source
 				Discharge:   "",                            // Not available in this source
@@ -297,4 +299,182 @@ func (ws *WaterScraper) parseTimestampText(text string) time.Time {
 	}
 
 	return timestamp
+}
+
+// FetchRhmzRsData retrieves water data from the novi.rhmzrs.com website
+func (ws *WaterScraper) FetchRhmzRsData() ([]entities.RiverData, error) {
+	log.Printf("Fetching data from RHMZ RS website")
+
+	// Step 1: Fetch the listing page
+	listURL := "https://novi.rhmzrs.com/page/bilten-izvjestaj-o-vodostanju"
+	resp, err := http.Get(listURL)
+	if err != nil {
+		log.Printf("Error fetching RHMZ RS listing page: %v", err)
+		return nil, fmt.Errorf("failed to fetch RHMZ RS listing page: %v", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Error reading RHMZ RS listing HTML: %v", err)
+		return nil, fmt.Errorf("error reading RHMZ RS listing HTML: %v", err)
+	}
+	body := string(bodyBytes)
+
+	// Step 2: Extract link to the latest bulletin
+	linkRe := regexp.MustCompile(`<a[^>]+href="([^"]+)"[^>]*>Редован\s+хидролошки\s+билтен`)
+	match := linkRe.FindStringSubmatch(body)
+	if len(match) < 2 {
+		log.Printf("Latest RHMZ RS bulletin link not found")
+		return nil, fmt.Errorf("latest RHMZ RS bulletin link not found")
+	}
+	href := match[1]
+	if strings.HasPrefix(href, "/") {
+		href = "https://novi.rhmzrs.com" + href
+	}
+	log.Printf("Found bulletin link: %s", href)
+
+	// Step 3: Fetch the bulletin page
+	resp2, err := http.Get(href)
+	if err != nil {
+		log.Printf("Error fetching RHMZ RS bulletin page: %v", err)
+		return nil, fmt.Errorf("error fetching RHMZ RS bulletin page: %v", err)
+	}
+	defer resp2.Body.Close()
+
+	// Step 4: Parse the HTML document using goquery
+	doc, err := goquery.NewDocumentFromReader(resp2.Body)
+	if err != nil {
+		log.Printf("Error parsing RHMZ RS bulletin HTML: %v", err)
+		return nil, fmt.Errorf("error parsing RHMZ RS bulletin HTML: %v", err)
+	}
+
+	// Step 5: Parse common timestamp
+	timestamp := time.Now() // Default timestamp
+	doc.Find("table tr").Each(func(i int, tr *goquery.Selection) {
+		// Look for the row containing the timestamp text
+		if tr.Find("td").Length() > 0 {
+			text := strings.TrimSpace(tr.Find("td").First().Text())
+			if strings.Contains(text, "НА ДАН") && strings.Contains(text, "ГОДИНЕ") {
+				tsRe := regexp.MustCompile(`НА\s+ДАН\s+(\d{2}\.\d{2}\.\d{4})\.\s*ГОДИНЕ,\s*У\s*(\d{1,2}:\d{2})`)
+				tsMatch := tsRe.FindStringSubmatch(text)
+
+				if len(tsMatch) == 3 {
+					// Parse timestamp from matched date and time
+					dateStr := tsMatch[1]
+					timeStr := tsMatch[2]
+					log.Printf("Extracted RHMZ RS date: '%s', time: '%s'", dateStr, timeStr)
+
+					// Parse timestamp in Serbian/Bosnian time zone
+					loc, _ := time.LoadLocation("Europe/Sarajevo")
+					t, err := time.ParseInLocation("02.01.2006 15:04", dateStr+" "+timeStr, loc)
+					if err == nil {
+						timestamp = t
+						log.Printf("Successfully parsed RHMZ RS timestamp: %s", timestamp.Format(time.RFC3339))
+					} else {
+						log.Printf("Error parsing RHMZ RS timestamp: %v", err)
+					}
+				}
+			}
+		}
+	})
+
+	// Step 6: Extract table data - skip header rows (first few rows with titles)
+	var data []entities.RiverData
+	var currentRiver string
+
+	// Get table rows (skip header rows)
+	var headerPassed bool
+
+	doc.Find("table tr").Each(func(i int, tr *goquery.Selection) {
+		cells := tr.Find("td")
+		cellCount := cells.Length()
+
+		// Skip rows without enough columns
+		if cellCount < 4 {
+			return
+		}
+
+		// Look for header row that contains column titles
+		if !headerPassed {
+			headerText := strings.TrimSpace(cells.Eq(0).Text())
+			if headerText == "РИЈЕКА" {
+				headerPassed = true
+				return // Skip this header row
+			}
+			return // Skip any row before header
+		}
+
+		// Check for empty rows or footnote rows
+		firstCellText := strings.TrimSpace(cells.Eq(0).Text())
+		if firstCellText == "" || strings.Contains(firstCellText, "Напомена") || strings.Contains(firstCellText, "Легенда") {
+			return
+		}
+
+		// Handle river name - might span multiple rows (use rowspan)
+		riverName := strings.TrimSpace(cells.Eq(0).Text())
+		if riverName != "" {
+			currentRiver = riverName
+		} else if currentRiver == "" {
+			return // Skip row if no river name is set
+		}
+
+		// Extract data from cells
+		station := strings.TrimSpace(cells.Eq(1).Text())
+
+		// Skip rows without a station name
+		if station == "" {
+			return
+		}
+
+		// Extract water level (4th column - index 3)
+		waterLevelStr := strings.TrimSpace(cells.Eq(3).Text())
+		if waterLevelStr == "-" || waterLevelStr == "" {
+			waterLevelStr = "0" // Default when no data
+		}
+
+		// Extract water change (5th column - index 4)
+		waterChange := strings.TrimSpace(cells.Eq(4).Text())
+
+		// Extract water temperature (6th column - index 5)
+		waterTemp := strings.TrimSpace(cells.Eq(5).Text())
+		if waterTemp == "-" {
+			waterTemp = "" // No temperature data
+		}
+
+		// Extract discharge (7th column - index 6)
+		discharge := strings.TrimSpace(cells.Eq(6).Text())
+		if discharge == "-" {
+			discharge = "" // No discharge data
+		}
+
+		// Extract tendency (8th column - index 7)
+		tendency := strings.TrimSpace(cells.Eq(7).Text())
+		// Map symbols to our standard format
+		switch tendency {
+		case "▲":
+			tendency = "rising"
+		case "▼":
+			tendency = "falling"
+		case "●":
+			tendency = "stable"
+		default:
+			tendency = ""
+		}
+
+		// Create a RiverData entry
+		data = append(data, entities.RiverData{
+			River:       currentRiver,
+			Station:     station,
+			WaterLevel:  waterLevelStr,
+			WaterChange: waterChange,
+			WaterTemp:   waterTemp,
+			Discharge:   discharge,
+			Tendency:    tendency,
+			Timestamp:   timestamp,
+		})
+	})
+
+	log.Printf("RHMZ RS data: extracted %d river data entries", len(data))
+	return data, nil
 }
