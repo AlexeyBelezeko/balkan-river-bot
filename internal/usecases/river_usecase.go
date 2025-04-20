@@ -125,8 +125,8 @@ func (uc *RiverUseCase) FormatRiverInfo(riverData []entities.RiverData, lastUpda
 		result.WriteString("\n")
 	}
 
-	// Add last update time
-	result.WriteString(fmt.Sprintf("🕒 Last update: %s", lastUpdate.Format("2006-01-02 15:04:05")))
+	// Add last update time with timezone
+	result.WriteString(fmt.Sprintf("🕒 Last update: %s %s", lastUpdate.Format("2006-01-02 15:04:05"), lastUpdate.Format("MST")))
 
 	return result.String()
 }

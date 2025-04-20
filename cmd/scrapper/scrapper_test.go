@@ -223,32 +223,26 @@ func TestDatabaseIntegration(t *testing.T) {
 	// Create test data instead of fetching from network
 	now := time.Now()
 	testData := []struct {
-		River       string
-		Station     string
-		WaterLevel  string
-		WaterChange string
-		Discharge   string
-		WaterTemp   string
-		Tendency    string
-		Timestamp   time.Time
+		River      string
+		Station    string
+		WaterLevel string
+		WaterTemp  string
+		Timestamp  time.Time
 	}{
-		{"TEST-DUNAV", "TEST-STATION-1", "100", "+5", "300", "15.5", "rising", now},
-		{"TEST-DUNAV", "TEST-STATION-2", "120", "-2", "310", "15.2", "falling", now},
-		{"TEST-SAVA", "TEST-STATION-3", "80", "0", "200", "14.0", "stable", now},
+		{"TEST-DUNAV", "TEST-STATION-1", "100", "15.5", now},
+		{"TEST-DUNAV", "TEST-STATION-2", "120", "15.2", now},
+		{"TEST-SAVA", "TEST-STATION-3", "80", "14.0", now},
 	}
 
 	// Convert to entity objects and save
 	var data []entities.RiverData
 	for _, d := range testData {
 		data = append(data, entities.RiverData{
-			River:       d.River,
-			Station:     d.Station,
-			WaterLevel:  d.WaterLevel,
-			WaterChange: d.WaterChange,
-			Discharge:   d.Discharge,
-			WaterTemp:   d.WaterTemp,
-			Tendency:    d.Tendency,
-			Timestamp:   d.Timestamp,
+			River:      d.River,
+			Station:    d.Station,
+			WaterLevel: d.WaterLevel,
+			WaterTemp:  d.WaterTemp,
+			Timestamp:  d.Timestamp,
 		})
 	}
 
@@ -352,7 +346,7 @@ func TestGradacRiverIntegration(t *testing.T) {
 	}
 
 	// Verify station name is correctly set
-	if data[0].Station != "Дегурић" {
+	if data[0].Station != "ДЕГУРИЋ" {
 		t.Errorf("Expected station name to be Дегурић, got %s", data[0].Station)
 	}
 
@@ -394,7 +388,7 @@ func TestGradacRiverIntegration(t *testing.T) {
 				if entry.River != "ГРАДАЦ" {
 					t.Errorf("Expected river name to be ГРАДАЦ, got %s", entry.River)
 				}
-				if entry.Station != "Дегурић" {
+				if entry.Station != "ДЕГУРИЋ" {
 					t.Errorf("Expected station name to be Дегурић, got %s", entry.Station)
 				}
 				if entry.WaterLevel == "" {
@@ -618,17 +612,14 @@ func TestRhmzRsWithMockData(t *testing.T) {
 
 	// Verify the entries
 	expected := []struct {
-		River       string
-		Station     string
-		WaterLevel  string
-		WaterChange string
-		WaterTemp   string
-		Discharge   string
-		Tendency    string
+		River      string
+		Station    string
+		WaterLevel string
+		WaterTemp  string
 	}{
-		{"ДРИНА", "ХЕ Зворник", "145", "-2", "10.2", "350.50", "falling"},
-		{"ДРИНА", "Радаљ", "142", "-3", "9.5", "320.20", "falling"},
-		{"САВА", "Сремска Митровица", "325", "5", "11.8", "1890.40", "rising"},
+		{"ДРИНА", "ХЕ Зворник", "145", "10.2"},
+		{"ДРИНА", "Радаљ", "142", "9.5"},
+		{"САВА", "Сремска Митровица", "325", "11.8"},
 	}
 
 	for i, e := range expected {
@@ -646,17 +637,8 @@ func TestRhmzRsWithMockData(t *testing.T) {
 		if data[i].WaterLevel != e.WaterLevel {
 			t.Errorf("Entry %d: Expected water level %s, got %s", i, e.WaterLevel, data[i].WaterLevel)
 		}
-		if data[i].WaterChange != e.WaterChange {
-			t.Errorf("Entry %d: Expected water change %s, got %s", i, e.WaterChange, data[i].WaterChange)
-		}
 		if data[i].WaterTemp != e.WaterTemp {
 			t.Errorf("Entry %d: Expected water temperature %s, got %s", i, e.WaterTemp, data[i].WaterTemp)
-		}
-		if data[i].Discharge != e.Discharge {
-			t.Errorf("Entry %d: Expected discharge %s, got %s", i, e.Discharge, data[i].Discharge)
-		}
-		if data[i].Tendency != e.Tendency {
-			t.Errorf("Entry %d: Expected tendency %s, got %s", i, e.Tendency, data[i].Tendency)
 		}
 
 		// Check timestamp

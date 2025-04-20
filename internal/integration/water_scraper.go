@@ -77,24 +77,16 @@ func (ws *WaterScraper) FetchWaterData() ([]entities.RiverData, error) {
 			// Extract station name from the third cell, which contains an <a> tag
 			station := strings.TrimSpace(cells.Eq(2).Find("a").Text())
 
-			// Extract water level, water change, discharge, water temperature, and tendency from the respective cells
+			// Extract water level and water temperature from the respective cells
 			waterLevel := strings.TrimSpace(cells.Eq(5).Text())
-			waterChange := strings.TrimSpace(cells.Eq(6).Text())
-			discharge := strings.TrimSpace(cells.Eq(7).Text())
 			waterTemp := strings.TrimSpace(cells.Eq(8).Text())
 
-			// Get tendency image
-			tendencyImg := cells.Eq(9).Find("img").AttrOr("alt", "")
-
 			data = append(data, entities.RiverData{
-				River:       river,
-				Station:     station,
-				WaterLevel:  waterLevel,
-				WaterChange: waterChange,
-				Discharge:   discharge,
-				WaterTemp:   waterTemp,
-				Tendency:    tendencyImg,
-				Timestamp:   timestamp,
+				River:      river,
+				Station:    station,
+				WaterLevel: waterLevel,
+				WaterTemp:  waterTemp,
+				Timestamp:  timestamp,
 			})
 		}
 	})
@@ -177,14 +169,11 @@ func (ws *WaterScraper) FetchGradacRiverData() ([]entities.RiverData, error) {
 
 			// Create river data entry
 			data = append(data, entities.RiverData{
-				River:       "ГРАДАЦ",
-				Station:     "ДЕГУРИЋ",
-				WaterLevel:  fmt.Sprintf("%d", waterLevel), // Ensure it's consistently formatted
-				WaterChange: "",                            // Not available in this source
-				Discharge:   "",                            // Not available in this source
-				WaterTemp:   "",                            // Not available in this source
-				Tendency:    "",                            // Not available in this source
-				Timestamp:   timestamp,
+				River:      "ГРАДАЦ",
+				Station:    "ДЕГУРИЋ",
+				WaterLevel: fmt.Sprintf("%d", waterLevel), // Ensure it's consistently formatted
+				WaterTemp:  "",                            // Not available in this source
+				Timestamp:  timestamp,
 			})
 		}
 	})
@@ -385,6 +374,34 @@ func (ws *WaterScraper) FetchRhmzRsData() ([]entities.RiverData, error) {
 
 	// Get table rows (skip header rows)
 	var headerPassed bool
+	// Track invalid river names and skipped entries
+	skippedEntries := 0
+	invalidRiverNames := 0
+	processedEntries := 0
+
+	// Function to check if a river name is valid
+	isValidRiverName := func(name string) bool {
+		// Skip empty names
+		if name == "" {
+			return false
+		}
+
+		// Count words (splitting by whitespace)
+		words := strings.Fields(name)
+		if len(words) > 3 {
+			log.Printf("Skipping river with too many words (%d): %s", len(words), name)
+			return false
+		}
+
+		// Check for special characters (excluding letters, digits, spaces, and hyphens)
+		specialCharRegex := regexp.MustCompile(`[^a-zA-Zа-яА-ЯčćđšžČĆĐŠŽ0-9\s\-]`)
+		if specialCharRegex.MatchString(name) {
+			log.Printf("Skipping river with special characters: %s", name)
+			return false
+		}
+
+		return true
+	}
 
 	doc.Find("table tr").Each(func(i int, tr *goquery.Selection) {
 		cells := tr.Find("td")
@@ -414,16 +431,32 @@ func (ws *WaterScraper) FetchRhmzRsData() ([]entities.RiverData, error) {
 		// Handle river name - might span multiple rows (use rowspan)
 		riverName := strings.TrimSpace(cells.Eq(0).Text())
 		if riverName != "" {
+			// Validate river name if it's not empty
+			if !isValidRiverName(riverName) {
+				invalidRiverNames++
+				currentRiver = "" // Reset current river to avoid using this invalid name
+				return
+			}
 			currentRiver = riverName
 		} else if currentRiver == "" {
+			skippedEntries++
 			return // Skip row if no river name is set
 		}
+
+		// Validate river name (must not be empty at this point)
+		if currentRiver == "" {
+			skippedEntries++
+			return // Skip rows with empty river names
+		}
+
+		processedEntries++
 
 		// Extract data from cells
 		station := strings.TrimSpace(cells.Eq(1).Text())
 
 		// Skip rows without a station name
 		if station == "" {
+			skippedEntries++
 			return
 		}
 
@@ -433,48 +466,23 @@ func (ws *WaterScraper) FetchRhmzRsData() ([]entities.RiverData, error) {
 			waterLevelStr = "0" // Default when no data
 		}
 
-		// Extract water change (5th column - index 4)
-		waterChange := strings.TrimSpace(cells.Eq(4).Text())
-
 		// Extract water temperature (6th column - index 5)
 		waterTemp := strings.TrimSpace(cells.Eq(5).Text())
 		if waterTemp == "-" {
 			waterTemp = "" // No temperature data
 		}
 
-		// Extract discharge (7th column - index 6)
-		discharge := strings.TrimSpace(cells.Eq(6).Text())
-		if discharge == "-" {
-			discharge = "" // No discharge data
-		}
-
-		// Extract tendency (8th column - index 7)
-		tendency := strings.TrimSpace(cells.Eq(7).Text())
-		// Map symbols to our standard format
-		switch tendency {
-		case "▲":
-			tendency = "rising"
-		case "▼":
-			tendency = "falling"
-		case "●":
-			tendency = "stable"
-		default:
-			tendency = ""
-		}
-
 		// Create a RiverData entry
 		data = append(data, entities.RiverData{
-			River:       currentRiver,
-			Station:     station,
-			WaterLevel:  waterLevelStr,
-			WaterChange: waterChange,
-			WaterTemp:   waterTemp,
-			Discharge:   discharge,
-			Tendency:    tendency,
-			Timestamp:   timestamp,
+			River:      currentRiver,
+			Station:    station,
+			WaterLevel: waterLevelStr,
+			WaterTemp:  waterTemp,
+			Timestamp:  timestamp,
 		})
 	})
 
-	log.Printf("RHMZ RS data: extracted %d river data entries", len(data))
+	log.Printf("RHMZ RS data: extracted %d river data entries, skipped %d entries with invalid river names, skipped %d other invalid entries",
+		len(data), invalidRiverNames, skippedEntries)
 	return data, nil
 }

@@ -52,10 +52,7 @@ func NewSQLiteRiverRepository(dbPath string) (*SQLiteRiverRepository, error) {
 		river TEXT NOT NULL,
 		station TEXT NOT NULL,
 		water_level TEXT,
-		water_change TEXT,
-		discharge TEXT,
 		water_temp TEXT,
-		tendency TEXT,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(river, station, timestamp)
 	);
@@ -91,14 +88,11 @@ func (r *SQLiteRiverRepository) SaveRiverData(data []entities.RiverData) error {
 
 	// Prepare SQL statement for inserting data
 	stmt, err := tx.Prepare(`
-		INSERT INTO river_data(river, station, water_level, water_change, discharge, water_temp, tendency, timestamp)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO river_data(river, station, water_level, water_temp, timestamp)
+		VALUES(?, ?, ?, ?, ?)
 		ON CONFLICT(river, station, timestamp) DO UPDATE SET
 		water_level=excluded.water_level,
-		water_change=excluded.water_change,
-		discharge=excluded.discharge,
-		water_temp=excluded.water_temp,
-		tendency=excluded.tendency
+		water_temp=excluded.water_temp
 	`)
 	if err != nil {
 		tx.Rollback()
@@ -112,10 +106,7 @@ func (r *SQLiteRiverRepository) SaveRiverData(data []entities.RiverData) error {
 			rd.River,
 			rd.Station,
 			rd.WaterLevel,
-			rd.WaterChange,
-			rd.Discharge,
 			rd.WaterTemp,
-			rd.Tendency,
 			rd.Timestamp,
 		)
 		if err != nil {
@@ -136,7 +127,7 @@ func (r *SQLiteRiverRepository) SaveRiverData(data []entities.RiverData) error {
 func (r *SQLiteRiverRepository) GetRiverDataByName(riverName string) ([]entities.RiverData, error) {
 	// Using subquery to get only the most recent data for each station
 	query := `
-		SELECT id, river, station, water_level, water_change, discharge, water_temp, tendency, timestamp
+		SELECT id, river, station, water_level, water_temp, timestamp
 		FROM river_data
 		WHERE river = ? AND (river, station, timestamp) IN (
 			SELECT river, station, MAX(timestamp) 
@@ -160,10 +151,7 @@ func (r *SQLiteRiverRepository) GetRiverDataByName(riverName string) ([]entities
 			&rd.River,
 			&rd.Station,
 			&rd.WaterLevel,
-			&rd.WaterChange,
-			&rd.Discharge,
 			&rd.WaterTemp,
-			&rd.Tendency,
 			&rd.Timestamp,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %v", err)
@@ -263,7 +251,7 @@ func (r *SQLiteRiverRepository) GetLastUpdateTime() (time.Time, error) {
 // GetRiverData retrieves all river data from the database after a specific cutoff time
 func (r *SQLiteRiverRepository) GetRiverData(cutoff time.Time) ([]entities.RiverData, error) {
 	query := `
-		SELECT id, river, station, water_level, water_change, discharge, water_temp, tendency, timestamp
+		SELECT id, river, station, water_level, water_temp, timestamp
 		FROM river_data
 		WHERE timestamp >= ?
 		ORDER BY river, station, timestamp DESC`
@@ -282,10 +270,7 @@ func (r *SQLiteRiverRepository) GetRiverData(cutoff time.Time) ([]entities.River
 			&rd.River,
 			&rd.Station,
 			&rd.WaterLevel,
-			&rd.WaterChange,
-			&rd.Discharge,
 			&rd.WaterTemp,
-			&rd.Tendency,
 			&rd.Timestamp,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %v", err)
