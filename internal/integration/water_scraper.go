@@ -133,8 +133,8 @@ func (ws *WaterScraper) FetchGradacRiverData() ([]entities.RiverData, error) {
 	validRows := 0
 	skippedRows := 0
 
-	// Default location for Serbian time zone
-	loc, _ := time.LoadLocation("Europe/Belgrade")
+	// Use UTC for parsing timestamps as the website posts timestamps in UTC
+	utc := time.UTC
 
 	// Based on the HTML structure, find all table rows in the document
 	// that contain water level data
@@ -154,10 +154,10 @@ func (ws *WaterScraper) FetchGradacRiverData() ([]entities.RiverData, error) {
 				return
 			}
 
-			// Parse the timestamp with various formats
-			timestamp, parseErr := time.ParseInLocation("02.01.2006 15:04", dateTimeStr, loc)
+			// Parse the timestamp in UTC since the website posts timestamps in UTC
+			timestamp, parseErr := time.ParseInLocation("02.01.2006 15:04", dateTimeStr, utc)
 			if parseErr != nil {
-				log.Printf("Warning: Skipping row with invalid timestamp format: %s, %w", dateTimeStr, parseErr)
+				log.Printf("Warning: Skipping row with invalid timestamp format: %s, %v", dateTimeStr, parseErr)
 				skippedRows++
 				return
 			}
