@@ -7,3 +7,14 @@ services:
     restart: always
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+    volumes:
+      - ./data:/app/data
+    command: ./water-bot
+
+  water-scraper:
+    image: water-bot:latest
+    container_name: water-scraper
+    restart: always
+    volumes:
+      - ./data:/app/data
+    command: ./water-scrapper

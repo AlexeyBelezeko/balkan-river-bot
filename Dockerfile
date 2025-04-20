@@ -4,10 +4,17 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o water-bot
+RUN mkdir -p /build && \
+    CGO_ENABLED=1 go build -o /build/water-bot cmd/bot/bot.go && \
+    CGO_ENABLED=1 go build -o /build/water-scrapper cmd/scrapper/scrapper.go
 
 FROM alpine:latest
-RUN apk --no-cache add ca-certificates
-WORKDIR /root/
-COPY --from=build /app/water-bot .
+RUN apk --no-cache add ca-certificates && apk add --no-cache tzdata
+WORKDIR /app/
+RUN mkdir -p data
+COPY --from=build /build/water-bot /app/
+COPY --from=build /build/water-scrapper /app/
+# Create directory for sqlite database
+RUN mkdir -p /app/data && chmod 777 /app/data
+# Default to running the bot, can be overridden with command
 CMD ["./water-bot"]

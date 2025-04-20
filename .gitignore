@@ -27,3 +27,9 @@ water-bot
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# SQLite database files
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
