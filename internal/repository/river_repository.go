@@ -229,13 +229,35 @@ func (r *SQLiteRiverRepository) GetLastUpdateTime() (time.Time, error) {
 		return time.Time{}, nil
 	}
 
-	// Parse the timestamp string using the SQLite DATETIME format
-	timestamp, err := time.ParseInLocation("2006-01-02 15:04:05", timestampStr.String, time.Local)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to parse timestamp '%s': %v", timestampStr.String, err)
+	// Try to parse the timestamp with different formats to handle potential timezone info
+	var timestamp time.Time
+	var parseErr error
+
+	// First try with timezone (RFC3339 format)
+	timestamp, parseErr = time.Parse(time.RFC3339, timestampStr.String)
+	if parseErr == nil {
+		return timestamp, nil
 	}
 
-	return timestamp, nil
+	// Try SQLite DATETIME format without timezone
+	timestamp, parseErr = time.ParseInLocation("2006-01-02 15:04:05", timestampStr.String, time.Local)
+	if parseErr == nil {
+		return timestamp, nil
+	}
+
+	// Try custom format with timezone suffix
+	timestamp, parseErr = time.Parse("2006-01-02 15:04:05-07:00", timestampStr.String)
+	if parseErr == nil {
+		return timestamp, nil
+	}
+
+	// Try one more format with timezone suffix
+	timestamp, parseErr = time.Parse("2006-01-02 15:04:05Z07:00", timestampStr.String)
+	if parseErr == nil {
+		return timestamp, nil
+	}
+
+	return time.Time{}, fmt.Errorf("failed to parse timestamp '%s': %v", timestampStr.String, parseErr)
 }
 
 // GetRiverData retrieves all river data from the database after a specific cutoff time
