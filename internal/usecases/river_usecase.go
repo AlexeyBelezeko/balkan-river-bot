@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/abelzeko/water-bot/internal/entities"
 	"github.com/abelzeko/water-bot/internal/integration"
@@ -64,17 +63,6 @@ func (uc *RiverUseCase) RefreshRiverData() error {
 		return fmt.Errorf("failed to save data to repository: %v", err)
 	}
 
-	// Get last update time
-	lastUpdate, err := uc.repo.GetLastUpdateTime()
-	if err != nil {
-		log.Printf("Warning: could not get last update time: %v", err)
-	} else {
-		log.Printf("Repository updated with %d entries at %s (data timestamp: %s)",
-			len(data),
-			time.Now().Format(time.RFC3339),
-			lastUpdate.Format(time.RFC3339))
-	}
-
 	return nil
 }
 
@@ -90,14 +78,8 @@ func (uc *RiverUseCase) GetAvailableRivers() ([]string, error) {
 	return uc.repo.GetUniqueRivers()
 }
 
-// GetLastUpdateTime returns when the river data was last updated
-func (uc *RiverUseCase) GetLastUpdateTime() (time.Time, error) {
-	log.Println("Retrieving last update time")
-	return uc.repo.GetLastUpdateTime()
-}
-
 // FormatRiverInfo formats river information for display
-func (uc *RiverUseCase) FormatRiverInfo(riverData []entities.RiverData, lastUpdate time.Time) string {
+func (uc *RiverUseCase) FormatRiverInfo(riverData []entities.RiverData) string {
 	if len(riverData) == 0 {
 		return "No information available for this river."
 	}
@@ -110,23 +92,16 @@ func (uc *RiverUseCase) FormatRiverInfo(riverData []entities.RiverData, lastUpda
 		result.WriteString(fmt.Sprintf("💧 Water Level: %s cm\n", data.WaterLevel))
 
 		// Only include fields that have values
-		if data.WaterChange != "" {
-			result.WriteString(fmt.Sprintf("📊 Change: %s cm\n", data.WaterChange))
-		}
-		if data.Discharge != "" {
-			result.WriteString(fmt.Sprintf("🌊 Discharge: %s m³/s\n", data.Discharge))
-		}
 		if data.WaterTemp != "" {
 			result.WriteString(fmt.Sprintf("🌡️ Water Temperature: %s °C\n", data.WaterTemp))
 		}
-		if data.Tendency != "" {
-			result.WriteString(fmt.Sprintf("📈 Tendency: %s\n", data.Tendency))
-		}
+
+		result.WriteString(fmt.Sprintf("🕒 Last update: %s", data.Timestamp.Format("2006-01-02 15:04:05 MST")))
+
 		result.WriteString("\n")
 	}
 
 	// Add last update time with timezone
-	result.WriteString(fmt.Sprintf("🕒 Last update: %s %s", lastUpdate.Format("2006-01-02 15:04:05"), lastUpdate.Format("MST")))
 
 	return result.String()
 }

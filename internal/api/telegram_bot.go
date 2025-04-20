@@ -74,14 +74,10 @@ func (t *TelegramBot) handleMessage(update tgbotapi.Update) {
 // handleCommand processes commands like /start, /help, etc.
 func (t *TelegramBot) handleCommand(message *tgbotapi.Message, msg *tgbotapi.MessageConfig) {
 	switch message.Command() {
-	case "start":
-		log.Printf("Handling /start command for user %s", message.From.UserName)
-		msg.Text = "Welcome to the Water Bot! Use /rivers to see the list of available rivers or /help for more information."
 
 	case "help":
 		log.Printf("Handling /help command for user %s", message.From.UserName)
 		msg.Text = "Available commands:\n" +
-			"/start - Start the bot\n" +
 			"/rivers - Show the list of rivers\n" +
 			"/river [name] - Show information for a specific river\n" +
 			"/help - Show this help message"
@@ -111,14 +107,11 @@ func (t *TelegramBot) handleRiversCommand(msg *tgbotapi.MessageConfig) {
 		return
 	}
 
-	lastUpdate, _ := t.useCase.GetLastUpdateTime()
-
 	msg.Text = "Available rivers:\n\n"
 	for _, river := range rivers {
 		msg.Text += "• " + river + "\n"
 	}
 	msg.Text += "\nUse /river [name] to get detailed information."
-	msg.Text += fmt.Sprintf("\n\n🕒 Last update: %s", lastUpdate.Format("2006-01-02 15:04:05"))
 }
 
 // handleRiverCommand processes the /river [name] command
@@ -141,8 +134,7 @@ func (t *TelegramBot) handleRiverCommand(args string, msg *tgbotapi.MessageConfi
 		return
 	}
 
-	lastUpdate, _ := t.useCase.GetLastUpdateTime()
-	msg.Text = t.useCase.FormatRiverInfo(riverData, lastUpdate)
+	msg.Text = t.useCase.FormatRiverInfo(riverData)
 }
 
 // handleNonCommand processes regular messages
@@ -170,8 +162,7 @@ func (t *TelegramBot) handleNonCommand(message *tgbotapi.Message, msg *tgbotapi.
 	response.WriteString("ЈФУИ (Just For Your Information):\n")
 
 	if len(riverData) > 0 {
-		lastUpdate, _ := t.useCase.GetLastUpdateTime()
-		response.WriteString(t.useCase.FormatRiverInfo(riverData, lastUpdate))
+		response.WriteString(t.useCase.FormatRiverInfo(riverData))
 	} else {
 		response.WriteString("No information available for river ГРАДАЦ at the moment.")
 	}

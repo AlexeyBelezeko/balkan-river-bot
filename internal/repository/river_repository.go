@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/abelzeko/water-bot/internal/entities"
 	_ "github.com/mattn/go-sqlite3"
@@ -18,7 +17,6 @@ type RiverRepository interface {
 	SaveRiverData(data []entities.RiverData) error
 	GetRiverDataByName(riverName string) ([]entities.RiverData, error)
 	GetUniqueRivers() ([]string, error)
-	GetLastUpdateTime() (time.Time, error)
 	Close() error
 }
 
@@ -199,88 +197,4 @@ func (r *SQLiteRiverRepository) GetUniqueRivers() ([]string, error) {
 	}
 
 	return rivers, nil
-}
-
-// GetLastUpdateTime returns the most recent timestamp in the database
-func (r *SQLiteRiverRepository) GetLastUpdateTime() (time.Time, error) {
-	var timestampStr sql.NullString
-	err := r.db.QueryRow("SELECT MAX(timestamp) FROM river_data").Scan(&timestampStr)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return time.Time{}, nil // Return zero time if no data
-		}
-		return time.Time{}, fmt.Errorf("failed to get last update time: %v", err)
-	}
-
-	// If the timestamp is null/empty, return zero time
-	if !timestampStr.Valid || timestampStr.String == "" {
-		return time.Time{}, nil
-	}
-
-	// Try to parse the timestamp with different formats to handle potential timezone info
-	var timestamp time.Time
-	var parseErr error
-
-	// First try with timezone (RFC3339 format)
-	timestamp, parseErr = time.Parse(time.RFC3339, timestampStr.String)
-	if parseErr == nil {
-		return timestamp, nil
-	}
-
-	// Try SQLite DATETIME format without timezone
-	timestamp, parseErr = time.ParseInLocation("2006-01-02 15:04:05", timestampStr.String, time.Local)
-	if parseErr == nil {
-		return timestamp, nil
-	}
-
-	// Try custom format with timezone suffix
-	timestamp, parseErr = time.Parse("2006-01-02 15:04:05-07:00", timestampStr.String)
-	if parseErr == nil {
-		return timestamp, nil
-	}
-
-	// Try one more format with timezone suffix
-	timestamp, parseErr = time.Parse("2006-01-02 15:04:05Z07:00", timestampStr.String)
-	if parseErr == nil {
-		return timestamp, nil
-	}
-
-	return time.Time{}, fmt.Errorf("failed to parse timestamp '%s': %v", timestampStr.String, parseErr)
-}
-
-// GetRiverData retrieves all river data from the database after a specific cutoff time
-func (r *SQLiteRiverRepository) GetRiverData(cutoff time.Time) ([]entities.RiverData, error) {
-	query := `
-		SELECT id, river, station, water_level, water_temp, timestamp
-		FROM river_data
-		WHERE timestamp >= ?
-		ORDER BY river, station, timestamp DESC`
-
-	rows, err := r.db.Query(query, cutoff)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query river data: %v", err)
-	}
-	defer rows.Close()
-
-	var result []entities.RiverData
-	for rows.Next() {
-		var rd entities.RiverData
-		if err := rows.Scan(
-			&rd.ID,
-			&rd.River,
-			&rd.Station,
-			&rd.WaterLevel,
-			&rd.WaterTemp,
-			&rd.Timestamp,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan row: %v", err)
-		}
-		result = append(result, rd)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error during row iteration: %v", err)
-	}
-
-	return result, nil
 }
