@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,7 +16,8 @@ import (
 
 // WaterScraper provides functionality to scrape water data from external sources
 type WaterScraper struct {
-	sourceURL string
+	sourceURL      string
+	gradacRiverURL string
 }
 
 // NewWaterScraper creates a new water data scraper
@@ -24,7 +27,8 @@ func NewWaterScraper(url string) *WaterScraper {
 		url = "https://www.hidmet.gov.rs/ciril/osmotreni/stanje_voda.php"
 	}
 	return &WaterScraper{
-		sourceURL: url,
+		sourceURL:      url,
+		gradacRiverURL: "https://www.hidmet.gov.rs/ciril/osmotreni/nrt_tabela_grafik.php?hm_id=45902&period=7",
 	}
 }
 
@@ -94,6 +98,103 @@ func (ws *WaterScraper) FetchWaterData() ([]entities.RiverData, error) {
 	})
 
 	log.Printf("Parsed %d rows, extracted %d valid data entries", rowCount, len(data))
+	return data, nil
+}
+
+// FetchGradacRiverData retrieves water data specifically for river ГРАДАЦ
+// Only returns valid timestamp-level pairs where level is an integer
+func (ws *WaterScraper) FetchGradacRiverData() ([]entities.RiverData, error) {
+	log.Printf("Sending HTTP request to fetch river ГРАДАЦ data")
+	// Send an HTTP GET request to the special ГРАДАЦ river URL
+	res, err := http.Get(ws.gradacRiverURL)
+	if err != nil {
+		log.Printf("Error fetching ГРАДАЦ river data: %v", err)
+		return nil, fmt.Errorf("failed to fetch ГРАДАЦ river data: %v", err)
+	}
+	defer res.Body.Close()
+
+	// Check for successful response
+	if res.StatusCode != 200 {
+		log.Printf("Received unexpected status code for ГРАДАЦ river: %d %s", res.StatusCode, res.Status)
+		return nil, fmt.Errorf("unexpected status code for ГРАДАЦ river: %d %s", res.StatusCode, res.Status)
+	}
+	log.Printf("Successfully received HTTP response for ГРАДАЦ river with status: %s", res.Status)
+
+	// Parse the HTML document
+	log.Printf("Parsing HTML document for ГРАДАЦ river")
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		log.Printf("Error parsing ГРАДАЦ river HTML: %v", err)
+		return nil, fmt.Errorf("failed to parse the ГРАДАЦ river webpage: %v", err)
+	}
+
+	var data []entities.RiverData
+	processedRows := 0
+	validRows := 0
+	skippedRows := 0
+
+	// Default location for Serbian time zone
+	loc, _ := time.LoadLocation("Europe/Belgrade")
+
+	// Based on the HTML structure, find all table rows in the document
+	// that contain water level data
+	doc.Find("table tr").Each(func(index int, row *goquery.Selection) {
+		cells := row.Find("td")
+		if cells.Length() == 2 {
+			processedRows++
+
+			// Extract datetime and water level
+			dateTimeStr := strings.TrimSpace(cells.Eq(0).Text())
+			waterLevelStr := strings.TrimSpace(cells.Eq(1).Text())
+
+			// Skip header rows or rows without proper date format
+			if dateTimeStr == "" || dateTimeStr == "Датум и време" ||
+				!strings.Contains(dateTimeStr, ".") || !strings.Contains(dateTimeStr, ":") {
+				skippedRows++
+				return
+			}
+
+			// Parse the timestamp with various formats
+			timestamp, parseErr := time.ParseInLocation("02.01.2006 15:04", dateTimeStr, loc)
+			if parseErr != nil {
+				log.Printf("Warning: Skipping row with invalid timestamp format: %s, %w", dateTimeStr, parseErr)
+				skippedRows++
+				return
+			}
+
+			// Parse water level to verify it's an integer
+			waterLevel, parseErr := strconv.Atoi(waterLevelStr)
+			if parseErr != nil {
+				log.Printf("Warning: Skipping row with non-integer water level: %s", waterLevelStr)
+				skippedRows++
+				return
+			}
+
+			// Only include valid data
+			validRows++
+
+			// Create river data entry
+			data = append(data, entities.RiverData{
+				River:       "ГРАДАЦ",
+				Station:     "Дегурић",
+				WaterLevel:  fmt.Sprintf("%d", waterLevel), // Ensure it's consistently formatted
+				WaterChange: "",                            // Not available in this source
+				Discharge:   "",                            // Not available in this source
+				WaterTemp:   "",                            // Not available in this source
+				Tendency:    "",                            // Not available in this source
+				Timestamp:   timestamp,
+			})
+		}
+	})
+
+	log.Printf("ГРАДАЦ river data: processed %d rows, found %d valid entries, skipped %d invalid entries",
+		processedRows, validRows, skippedRows)
+
+	// Sorting data by timestamp (oldest first) for consistency
+	sort.Slice(data, func(i, j int) bool {
+		return data[i].Timestamp.Before(data[j].Timestamp)
+	})
+
 	return data, nil
 }
 

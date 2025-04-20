@@ -30,14 +30,25 @@ func NewRiverUseCase(repo repository.RiverRepository, scraper *integration.Water
 func (uc *RiverUseCase) RefreshRiverData() error {
 	log.Println("Starting river data refresh process...")
 
-	// Fetch data from external source
+	// Fetch main water data from external source
 	data, err := uc.scraper.FetchWaterData()
 	if err != nil {
-		return fmt.Errorf("failed to fetch water data: %v", err)
+		return fmt.Errorf("failed to fetch general water data: %v", err)
 	}
 	log.Printf("Successfully fetched %d river data entries", len(data))
 
-	// Save to repository
+	// Fetch ГРАДАЦ river data
+	gradacData, err := uc.scraper.FetchGradacRiverData()
+	if err != nil {
+		log.Printf("Warning: failed to fetch ГРАДАЦ river data: %v", err)
+		// Continue with the main data if ГРАДАЦ fetch fails
+	} else {
+		log.Printf("Successfully fetched %d ГРАДАЦ river data entries", len(gradacData))
+		// Append ГРАДАЦ data to the main data set
+		data = append(data, gradacData...)
+	}
+
+	// Save all data to repository
 	if err := uc.repo.SaveRiverData(data); err != nil {
 		return fmt.Errorf("failed to save data to repository: %v", err)
 	}
@@ -86,9 +97,17 @@ func (uc *RiverUseCase) FormatRiverInfo(riverData []entities.RiverData, lastUpda
 	for _, data := range riverData {
 		result.WriteString(fmt.Sprintf("📍 Station: %s\n", data.Station))
 		result.WriteString(fmt.Sprintf("💧 Water Level: %s cm\n", data.WaterLevel))
-		result.WriteString(fmt.Sprintf("📊 Change: %s cm\n", data.WaterChange))
-		result.WriteString(fmt.Sprintf("🌊 Discharge: %s m³/s\n", data.Discharge))
-		result.WriteString(fmt.Sprintf("🌡️ Water Temperature: %s °C\n", data.WaterTemp))
+
+		// Only include fields that have values
+		if data.WaterChange != "" {
+			result.WriteString(fmt.Sprintf("📊 Change: %s cm\n", data.WaterChange))
+		}
+		if data.Discharge != "" {
+			result.WriteString(fmt.Sprintf("🌊 Discharge: %s m³/s\n", data.Discharge))
+		}
+		if data.WaterTemp != "" {
+			result.WriteString(fmt.Sprintf("🌡️ Water Temperature: %s °C\n", data.WaterTemp))
+		}
 		if data.Tendency != "" {
 			result.WriteString(fmt.Sprintf("📈 Tendency: %s\n", data.Tendency))
 		}

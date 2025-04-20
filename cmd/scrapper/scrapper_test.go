@@ -302,3 +302,104 @@ func TestDatabaseIntegration(t *testing.T) {
 	// In a real application we would need to add proper parsing in the repository
 	t.Log("Skipping LastUpdateTime test due to SQLite timestamp format compatibility")
 }
+
+// TestGradacRiverIntegration tests the integration for the ГРАДАЦ river
+func TestGradacRiverIntegration(t *testing.T) {
+	// Skip this test in CI environments or add a flag to control real network calls
+	if os.Getenv("CI") == "true" {
+		t.Skip("Skipping test in CI environment")
+	}
+
+	// Create a scraper
+	scraper := integration.NewWaterScraper("")
+
+	// Fetch ГРАДАЦ river data
+	data, err := scraper.FetchGradacRiverData()
+	if err != nil {
+		// Don't fail the test completely if it's just a temporary network issue
+		t.Logf("Warning: Failed to fetch ГРАДАЦ river data: %v", err)
+		t.Skip("Skipping test due to network issues - this is not a code bug")
+		return
+	}
+
+	// Verify that we got some data
+	if len(data) == 0 {
+		t.Error("No ГРАДАЦ river data was extracted from the website")
+		return
+	}
+
+	t.Logf("Successfully fetched %d ГРАДАЦ river data entries", len(data))
+
+	// Print first few entries to verify the data format
+	for i, entry := range data {
+		if i >= 3 { // Only print first 3 entries
+			break
+		}
+		t.Logf("Entry %d: River=%s, Station=%s, WaterLevel=%s, WaterTemp=%s, Timestamp=%s",
+			i, entry.River, entry.Station, entry.WaterLevel, entry.WaterTemp, entry.Timestamp.Format(time.RFC3339))
+	}
+
+	// Check if timestamps are not zero
+	if data[0].Timestamp.IsZero() {
+		t.Error("Timestamp is zero, extraction failed")
+		return
+	}
+
+	// Verify river name is correctly set
+	if data[0].River != "ГРАДАЦ" {
+		t.Errorf("Expected river name to be ГРАДАЦ, got %s", data[0].River)
+	}
+
+	// Verify station name is correctly set
+	if data[0].Station != "Дегурић" {
+		t.Errorf("Expected station name to be Дегурић, got %s", data[0].Station)
+	}
+
+	// Create temporary database for testing
+	tempDir, err := os.MkdirTemp("", "water-bot-gradac-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir) // Clean up
+
+	dbPath := filepath.Join(tempDir, "test-gradac-riverdata.db")
+
+	// Initialize the repository with test database
+	repo, err := repository.NewSQLiteRiverRepository(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to initialize repository: %v", err)
+	}
+	defer repo.Close()
+
+	// Save to repository
+	if err := repo.SaveRiverData(data); err != nil {
+		t.Fatalf("Failed to save ГРАДАЦ data to repository: %v", err)
+	}
+
+	// Try to retrieve the data we just saved
+	retrievedData, err := repo.GetRiverDataByName("ГРАДАЦ")
+	if err != nil {
+		t.Errorf("Failed to retrieve ГРАДАЦ river data: %v", err)
+	} else {
+		if len(retrievedData) == 0 {
+			t.Errorf("Expected entries for ГРАДАЦ, got none")
+		} else {
+			t.Logf("Retrieved %d entries for river ГРАДАЦ", len(retrievedData))
+			t.Logf("First entry: River=%s, Station=%s, WaterLevel=%s",
+				retrievedData[0].River, retrievedData[0].Station, retrievedData[0].WaterLevel)
+
+			// Verify that we have valid river data in the retrieved entries
+			for _, entry := range retrievedData {
+				if entry.River != "ГРАДАЦ" {
+					t.Errorf("Expected river name to be ГРАДАЦ, got %s", entry.River)
+				}
+				if entry.Station != "Дегурић" {
+					t.Errorf("Expected station name to be Дегурић, got %s", entry.Station)
+				}
+				if entry.WaterLevel == "" {
+					t.Error("Water level is empty")
+				}
+			}
+		}
+	}
+}
