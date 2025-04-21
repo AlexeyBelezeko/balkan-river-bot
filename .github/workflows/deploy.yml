@@ -63,7 +63,8 @@ jobs:
         ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.DIGITALOCEAN_USERNAME }}@${{ secrets.DIGITALOCEAN_HOST }} "
           cd /opt/water-bot && 
           docker load -i water-bot.tar && 
-          echo \"TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}\" > .env && 
+          echo \"TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}\" > .env && \
+          echo \"OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}\" >> .env && \
           docker-compose down && 
           docker-compose up -d && 
           rm water-bot.tar && 
