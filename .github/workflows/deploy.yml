@@ -42,6 +42,10 @@ jobs:
           echo "Error: TELEGRAM_BOT_TOKEN secret is not set"
           exit 1
         fi
+        if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
+          echo "Error: OPENAI_API_KEY secret is not set"
+          exit 1
+        fi
         
     - name: Setup SSH Key
       run: |
