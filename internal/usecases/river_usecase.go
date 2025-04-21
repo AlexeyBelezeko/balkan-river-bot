@@ -2,26 +2,30 @@
 package usecases
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
 
 	"github.com/abelzeko/water-bot/internal/entities"
 	"github.com/abelzeko/water-bot/internal/integration"
+	"github.com/abelzeko/water-bot/internal/integration/openai"
 	"github.com/abelzeko/water-bot/internal/repository"
 )
 
 // RiverUseCase handles business logic related to river data
 type RiverUseCase struct {
-	repo    repository.RiverRepository
-	scraper *integration.WaterScraper
+	repo          repository.RiverRepository
+	scraper       *integration.WaterScraper
+	openAIService openai.OpenAIService
 }
 
 // NewRiverUseCase creates a new river use case
-func NewRiverUseCase(repo repository.RiverRepository, scraper *integration.WaterScraper) *RiverUseCase {
+func NewRiverUseCase(repo repository.RiverRepository, scraper *integration.WaterScraper, openAIService openai.OpenAIService) *RiverUseCase {
 	return &RiverUseCase{
-		repo:    repo,
-		scraper: scraper,
+		repo:          repo,
+		scraper:       scraper,
+		openAIService: openAIService,
 	}
 }
 
@@ -76,6 +80,72 @@ func (uc *RiverUseCase) GetRiverDataByName(riverName string) ([]entities.RiverDa
 func (uc *RiverUseCase) GetAvailableRivers() ([]string, error) {
 	log.Println("Retrieving list of available rivers")
 	return uc.repo.GetUniqueRivers()
+}
+
+// HandleNaturalLanguageQuery interprets a user's free-text query using the AI service
+// and returns an appropriate response string.
+func (uc *RiverUseCase) HandleNaturalLanguageQuery(ctx context.Context, query string) (string, error) {
+	log.Printf("Interpreting natural language query: %s", query)
+
+	rivers, err := uc.GetAvailableRivers()
+	if err != nil {
+		log.Printf("Error fetching available rivers: %v", err)
+		return "Sorry, I couldn't fetch the list of rivers right now.", nil
+	}
+
+	// Call the OpenAI service to interpret the query
+	agentResp, err := uc.openAIService.InterpretUserQuery(ctx, query, rivers)
+	if err != nil {
+		log.Printf("Error interpreting user query via OpenAI: %v", err)
+		// Return a generic error message for the user
+		return "Sorry, I'm having trouble understanding right now. Please try again later or use /help.", nil
+	}
+
+	log.Printf("Agent response: Command='%s', River='%s', Message='%s'",
+		agentResp.CommandName, agentResp.SerbianRiverName, agentResp.UserMessage)
+
+	// Process the agent's response
+	switch agentResp.CommandName {
+	case "GetRiverDataByName":
+		if agentResp.SerbianRiverName != "" {
+			// Agent identified intent and river name, fetch and format data
+			log.Printf("Agent identified river: %s. Fetching data...", agentResp.SerbianRiverName)
+			riverData, err := uc.GetRiverDataByName(agentResp.SerbianRiverName)
+			if err != nil {
+				log.Printf("Error fetching river data after agent interpretation: %v", err)
+				return "Sorry, I couldn't fetch the data for that river right now.", nil
+			}
+			if len(riverData) == 0 {
+				// Combine agent's confirmation (if any) with 'not found' message
+				msg := agentResp.UserMessage
+				if msg != "" {
+					msg += "\n\n"
+				}
+				msg += fmt.Sprintf("However, I couldn't find any information for river '%s'. Use /rivers to see available ones.", agentResp.SerbianRiverName)
+				return msg, nil
+			}
+			// Combine agent's confirmation (if any) with the formatted data
+			msg := agentResp.UserMessage
+			if msg != "" {
+				msg += "\n\n"
+			}
+			msg += uc.FormatRiverInfo(riverData)
+			return msg, nil
+		} else {
+			// Agent identified intent but not a specific river, use the agent's message
+			log.Printf("Agent identified intent GetRiverDataByName but no specific river found.")
+			// Return the agent's message (e.g., "Which river?")
+			return agentResp.UserMessage, nil
+		}
+	case "GeneralQuery":
+		// Agent determined it's a general query, just return the generated message
+		log.Printf("Agent identified general query.")
+		return agentResp.UserMessage, nil
+	default:
+		// Fallback if agent returns an unexpected command or empty response
+		log.Printf("Agent returned unexpected command: %s", agentResp.CommandName)
+		return "I'm not sure how to respond to that. You can use /help for commands.", nil
+	}
 }
 
 // FormatRiverInfo formats river information for display

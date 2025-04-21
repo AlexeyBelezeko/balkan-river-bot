@@ -6,6 +6,7 @@ import (
 
 	"github.com/abelzeko/water-bot/internal/api"
 	"github.com/abelzeko/water-bot/internal/integration"
+	"github.com/abelzeko/water-bot/internal/integration/openai" // Updated import
 	"github.com/abelzeko/water-bot/internal/repository"
 	"github.com/abelzeko/water-bot/internal/usecases"
 )
@@ -15,6 +16,12 @@ func main() {
 	log.SetOutput(os.Stdout)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	log.Println("Starting Water Bot...")
+
+	// Initialize OpenAI Service
+	openAIService, err := openai.NewOpenAIService() // Updated constructor call
+	if err != nil {
+		log.Fatalf("Failed to initialize OpenAI service: %v", err)
+	}
 
 	// Initialize repository
 	repo, err := repository.NewSQLiteRiverRepository("")
@@ -26,8 +33,8 @@ func main() {
 	// Initialize scraper
 	scraper := integration.NewWaterScraper("")
 
-	// Initialize use case
-	useCase := usecases.NewRiverUseCase(repo, scraper)
+	// Initialize use case with OpenAI service
+	useCase := usecases.NewRiverUseCase(repo, scraper, openAIService)
 
 	// Get the bot token from environment variable
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")

@@ -28,7 +28,7 @@ func main() {
 	scraper := integration.NewWaterScraper("")
 
 	// Initialize use case
-	useCase := usecases.NewRiverUseCase(repo, scraper)
+	useCase := usecases.NewRiverUseCase(repo, scraper, nil)
 
 	// Run use case immediately on startup
 	if err := useCase.RefreshRiverData(); err != nil {
